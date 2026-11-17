@@ -1,0 +1,44 @@
+name: build-from-zip
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+
+      - name: unpack the source zip
+        run: |
+          ZIP=$(ls ./*.zip | head -n 1)
+          if [ -z "$ZIP" ]; then
+            echo "No .zip file found in the repository root" >&2
+            exit 1
+          fi
+          echo "Unpacking $ZIP"
+          unzip -q "$ZIP" -d unpacked
+          PROJECT=$(dirname "$(find unpacked -name gradlew -print -quit)")
+          echo "Project folder: $PROJECT"
+          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
+
+      - name: setup jdk
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+
+      - name: make gradle wrapper executable
+        run: chmod +x "$PROJECT_DIR/gradlew"
+
+      - name: build
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: ./gradlew build --stacktrace
+
+      - name: capture build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: nitrocore-jar
+          path: ${{ env.PROJECT_DIR }}/build/libs/
